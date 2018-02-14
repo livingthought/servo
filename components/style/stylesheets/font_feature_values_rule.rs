@@ -20,7 +20,7 @@ use std::fmt::{self, Write};
 use str::CssStringWriter;
 use style_traits::{CssWriter, ParseError, StyleParseErrorKind, ToCss};
 use stylesheets::CssRuleType;
-use values::computed::font::FamilyName;
+use values::generics::font::FamilyName;
 use values::serialize_atom_identifier;
 
 /// A @font-feature-values block declaration.

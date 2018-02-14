@@ -150,7 +150,7 @@ use style::traversal::resolve_style;
 use style::traversal_flags::{self, TraversalFlags};
 use style::values::{CustomIdent, KeyframesName};
 use style::values::animated::{Animate, Procedure, ToAnimatedZero};
-use style::values::computed::{Context, ToComputedValue};
+use style::values::computed::{self, Context, ToComputedValue};
 use style::values::distance::ComputeSquaredDistance;
 use style::values::specified;
 use style::values::specified::gecko::IntersectionObserverRootMargin;
@@ -191,8 +191,8 @@ pub extern "C" fn Servo_Initialize(dummy_url_data: *mut URLExtraData) {
     origin_flags::assert_flags_match();
     parser::assert_parsing_mode_match();
     traversal_flags::assert_traversal_flags_match();
-    specified::font::assert_variant_east_asian_matches();
-    specified::font::assert_variant_ligatures_matches();
+    computed::font::assert_variant_east_asian_matches();
+    computed::font::assert_variant_ligatures_matches();
     specified::box_::assert_touch_action_matches();
 
     // Initialize the dummy url data
@@ -4745,7 +4745,7 @@ pub extern "C" fn Servo_ParseFontDescriptor(
     use style::computed_values::{font_stretch, font_style};
     use style::font_face::{FontDisplay, FontWeight, Source};
     use style::properties::longhands::font_language_override;
-    use style::values::computed::font::FamilyName;
+    use style::values::generics::font::FamilyName;
     use style::values::specified::font::{SpecifiedFontFeatureSettings, FontVariationSettings};
 
     let string = unsafe { (*value).to_string() };

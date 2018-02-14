@@ -44,6 +44,7 @@ use values::computed::{LengthOrPercentageOrNone, MaxLength};
 use values::computed::{NonNegativeNumber, Number, NumberOrPercentage, Percentage};
 use values::computed::length::NonNegativeLengthOrPercentage;
 use values::computed::ToComputedValue;
+use values::computed::font::FontVariationSettings;
 use values::computed::transform::{DirectionVector, Matrix, Matrix3D};
 use values::computed::transform::TransformOperation as ComputedTransformOperation;
 use values::computed::transform::Transform as ComputedTransform;
@@ -52,14 +53,11 @@ use values::computed::transform::Translate as ComputedTranslate;
 use values::computed::transform::Scale as ComputedScale;
 use values::generics::transform::{self, Rotate, Translate, Scale, Transform, TransformOperation};
 use values::distance::{ComputeSquaredDistance, SquaredDistance};
-use values::generics::font::FontSettings as GenericFontSettings;
-use values::computed::font::FontVariationSettings;
-use values::generics::font::VariationValue;
+use values::generics::font::{FontSettings as GenericFontSettings, FontTag, VariationValue};
 use values::generics::effects::Filter;
 use values::generics::position as generic_position;
 use values::generics::svg::{SVGLength,  SvgLengthOrPercentageOrNumber, SVGPaint};
 use values::generics::svg::{SVGPaintKind, SVGStrokeDashArray, SVGOpacity};
-use values::specified::font::FontTag;
 use void::{self, Void};
 
 /// <https://drafts.csswg.org/css-transitions/#animtype-repeatable-list>

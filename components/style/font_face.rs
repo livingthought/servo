@@ -24,7 +24,7 @@ use std::fmt::{self, Write};
 use str::CssStringWriter;
 use style_traits::{Comma, CssWriter, OneOrMoreSeparated, ParseError};
 use style_traits::{StyleParseErrorKind, ToCss};
-use values::computed::font::FamilyName;
+use values::generics::font::FamilyName;
 #[cfg(feature = "gecko")]
 use values::specified::font::{SpecifiedFontFeatureSettings, FontVariationSettings};
 use values::specified::url::SpecifiedUrl;

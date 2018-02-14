@@ -5,7 +5,7 @@
 //! Various macro helpers.
 
 macro_rules! exclusive_value {
-    (($value:ident, $set:expr) => $ident:path) => {
+    (($value:ident, $set:expr) => $ident:expr) => {
         if $value.intersects($set) {
             return Err(())
         } else {

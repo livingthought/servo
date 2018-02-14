@@ -30,7 +30,7 @@ use stylesheets::supports_rule::SupportsCondition;
 use stylesheets::viewport_rule;
 use values::CustomIdent;
 use values::KeyframesName;
-use values::computed::font::FamilyName;
+use values::generics::font::FamilyName;
 use values::specified::url::SpecifiedUrl;
 
 /// The parser for the top-level rules in a stylesheet.

@@ -26,7 +26,8 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::u32;
 use style::font_face::{EffectiveSources, Source};
-use style::values::computed::font::{SingleFontFamily, FamilyName};
+use style::values::computed::font::SingleFontFamily;
+use style::values::generics::font::FamilyName;
 use webrender_api;
 
 /// A list of font templates that make up a given font family.

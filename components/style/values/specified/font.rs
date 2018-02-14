@@ -19,9 +19,24 @@ use std::ascii::AsciiExt;
 use std::fmt::{self, Write};
 use style_traits::{CssWriter, ParseError, StyleParseErrorKind, ToCss};
 use values::CustomIdent;
-use values::computed::{font as computed, Context, Length, NonNegativeLength, ToComputedValue};
-use values::computed::font::{SingleFontFamily, FontFamilyList, FamilyName};
-use values::generics::font::{FontSettings, FeatureTagValue, VariationValue};
+use values::computed::{Context, Length, NonNegativeLength, ToComputedValue};
+use values::computed::font::FontFamily as ComputedFontFamily;
+use values::computed::font::FontFamilyList;
+use values::computed::font::FontFeatureSettings as ComputedFontFeatureSettings;
+use values::computed::font::FontLanguageOverride as ComputedFontLanguageOverride;
+use values::computed::font::FontSize as ComputedFontSize;
+use values::computed::font::FontSizeAdjust as ComputedFontSizeAdjust;
+use values::computed::font::FontVariantAlternates as ComputedFontVariantAlternates;
+use values::computed::font::FontVariantEastAsian as ComputedFontVariantEastAsian;
+use values::computed::font::FontVariantLigatures as ComputedFontVariantLigatures;
+use values::computed::font::FontVariantNumeric as ComputedFontVariantNumeric;
+use values::computed::font::FontWeight as ComputedFontWeight;
+#[cfg(feature = "gecko")]
+use values::computed::font::MozScriptLevel as ComputedMozScriptLevel;
+use values::computed::font::MozScriptMinSize as ComputedMozScriptMinSize;
+use values::computed::font::SingleFontFamily;
+use values::generics::font::{FamilyName, FeatureTagValue, FontSettings, FontTag};
+use values::generics::font::{KeywordInfo as GenericKeywordInfo, KeywordSize, VariationValue};
 use values::specified::{AllowQuirks, Integer, LengthOrPercentage, NoCalcLength, Number};
 use values::specified::length::{AU_PER_PT, AU_PER_PX, FontBaseSize};
 
@@ -40,7 +55,7 @@ pub enum FontWeight {
     /// Lighter variant
     Lighter,
     /// Computed weight variant
-    Weight(computed::FontWeight),
+    Weight(ComputedFontWeight),
     /// System font varaint
     System(SystemFont),
 }
@@ -48,7 +63,7 @@ pub enum FontWeight {
 impl FontWeight {
     /// Get a specified FontWeight from a gecko keyword
     pub fn from_gecko_keyword(kw: u32) -> Self {
-        computed::FontWeight::from_int(kw as i32).map(FontWeight::Weight)
+        ComputedFontWeight::from_int(kw as i32).map(FontWeight::Weight)
             .expect("Found unexpected value in style struct for font-weight property")
     }
 
@@ -80,7 +95,7 @@ impl Parse for FontWeight {
                 }
             }
             Token::Number { int_value: Some(value), .. } => {
-                computed::FontWeight::from_int(value).map(FontWeight::Weight)
+                ComputedFontWeight::from_int(value).map(FontWeight::Weight)
             },
             _ => Err(()),
         };
@@ -90,14 +105,14 @@ impl Parse for FontWeight {
 }
 
 impl ToComputedValue for FontWeight {
-    type ComputedValue = computed::FontWeight;
+    type ComputedValue = ComputedFontWeight;
 
     #[inline]
     fn to_computed_value(&self, context: &Context) -> Self::ComputedValue {
         match *self {
             FontWeight::Weight(weight) => weight,
-            FontWeight::Normal => computed::FontWeight::normal(),
-            FontWeight::Bold => computed::FontWeight::bold(),
+            FontWeight::Normal => ComputedFontWeight::normal(),
+            FontWeight::Bold => ComputedFontWeight::bold(),
             FontWeight::Bolder => {
                 context.builder.get_parent_font().clone_font_weight().bolder()
             },
@@ -114,7 +129,7 @@ impl ToComputedValue for FontWeight {
     }
 
     #[inline]
-    fn from_computed_value(computed: &computed::FontWeight) -> Self {
+    fn from_computed_value(computed: &ComputedFontWeight) -> Self {
         FontWeight::Weight(*computed)
     }
 }
@@ -134,7 +149,7 @@ pub enum FontSize {
     /// go into the ratio, and the remaining units all computed together
     /// will go into the offset.
     /// See bug 1355707.
-    Keyword(computed::KeywordInfo),
+    Keyword(KeywordInfo),
     /// font-size: smaller
     Smaller,
     /// font-size: larger
@@ -207,11 +222,11 @@ impl FontFamily {
 }
 
 impl ToComputedValue for FontFamily {
-    type ComputedValue = computed::FontFamily;
+    type ComputedValue = ComputedFontFamily;
 
     fn to_computed_value(&self, _cx: &Context) -> Self::ComputedValue {
         match *self {
-            FontFamily::Values(ref v) => computed::FontFamily(v.clone()),
+            FontFamily::Values(ref v) => ComputedFontFamily(v.clone()),
             FontFamily::System(_) => {
                 #[cfg(feature = "gecko")] {
                     _cx.cached_system_font.as_ref().unwrap().font_family.clone()
@@ -223,7 +238,7 @@ impl ToComputedValue for FontFamily {
         }
     }
 
-    fn from_computed_value(other: &computed::FontFamily) -> Self {
+    fn from_computed_value(other: &ComputedFontFamily) -> Self {
         FontFamily::Values(other.0.clone())
     }
 }
@@ -304,12 +319,12 @@ impl FontSizeAdjust {
 }
 
 impl ToComputedValue for FontSizeAdjust {
-    type ComputedValue = computed::FontSizeAdjust;
+    type ComputedValue = ComputedFontSizeAdjust;
 
     fn to_computed_value(&self, context: &Context) -> Self::ComputedValue {
         match *self {
-            FontSizeAdjust::None => computed::FontSizeAdjust::None,
-            FontSizeAdjust::Number(ref n) => computed::FontSizeAdjust::Number(n.to_computed_value(context)),
+            FontSizeAdjust::None => ComputedFontSizeAdjust::None,
+            FontSizeAdjust::Number(ref n) => ComputedFontSizeAdjust::Number(n.to_computed_value(context)),
             FontSizeAdjust::System(_) => {
                 #[cfg(feature = "gecko")] {
                     context.cached_system_font.as_ref().unwrap().font_size_adjust
@@ -321,10 +336,10 @@ impl ToComputedValue for FontSizeAdjust {
         }
     }
 
-    fn from_computed_value(computed: &computed::FontSizeAdjust) -> Self {
+    fn from_computed_value(computed: &Self::ComputedValue) -> Self {
         match *computed {
-            computed::FontSizeAdjust::None => FontSizeAdjust::None,
-            computed::FontSizeAdjust::Number(ref v) => FontSizeAdjust::Number(Number::from_computed_value(v)),
+            ComputedFontSizeAdjust::None => FontSizeAdjust::None,
+            ComputedFontSizeAdjust::Number(ref v) => FontSizeAdjust::Number(Number::from_computed_value(v)),
         }
     }
 }
@@ -340,27 +355,29 @@ impl Parse for FontSizeAdjust {
     }
 }
 
-/// CSS font keywords
-#[derive(Animate, ComputeSquaredDistance, MallocSizeOf, ToAnimatedValue, ToAnimatedZero)]
-#[derive(Clone, Copy, Debug, PartialEq)]
-#[allow(missing_docs)]
-pub enum KeywordSize {
-    XXSmall = 1, // This is to enable the NonZero optimization
-                 // which simplifies the representation of Option<KeywordSize>
-                 // in bindgen
-    XSmall,
-    Small,
-    Medium,
-    Large,
-    XLarge,
-    XXLarge,
-    // This is not a real font keyword and will not parse
-    // HTML font-size 7 corresponds to this value
-    XXXLarge,
+/// Additional information for specified keyword-derived font sizes.
+pub type KeywordInfo = GenericKeywordInfo<NonNegativeLength>;
+
+impl KeywordInfo {
+    /// Computes the final size for this font-size keyword, accounting for
+    /// text-zoom.
+    pub fn to_computed_value(&self, context: &Context) -> NonNegativeLength {
+        let base = context.maybe_zoom_text(self.kw.to_computed_value(context));
+        base.scale_by(self.factor) + context.maybe_zoom_text(self.offset)
+    }
+
+    /// Given a parent keyword info (self), apply an additional factor/offset to it
+    pub fn compose(self, factor: f32, offset: NonNegativeLength) -> Self {
+        KeywordInfo {
+            kw: self.kw,
+            factor: self.factor * factor,
+            offset: self.offset.scale_by(factor) + offset,
+        }
+    }
 }
 
 impl KeywordSize {
-    /// Parse a keyword size
+    /// Parses a keyword size.
     pub fn parse<'i, 't>(input: &mut Parser<'i, 't>) -> Result<Self, ParseError<'i>> {
         try_match_ident_ignore_ascii_case! { input,
             "xx-small" => Ok(KeywordSize::XXSmall),
@@ -371,46 +388,6 @@ impl KeywordSize {
             "x-large" => Ok(KeywordSize::XLarge),
             "xx-large" => Ok(KeywordSize::XXLarge),
         }
-    }
-
-    /// Convert to an HTML <font size> value
-    pub fn html_size(&self) -> u8 {
-        match *self {
-            KeywordSize::XXSmall => 0,
-            KeywordSize::XSmall => 1,
-            KeywordSize::Small => 2,
-            KeywordSize::Medium => 3,
-            KeywordSize::Large => 4,
-            KeywordSize::XLarge => 5,
-            KeywordSize::XXLarge => 6,
-            KeywordSize::XXXLarge => 7,
-        }
-    }
-}
-
-impl Default for KeywordSize {
-    fn default() -> Self {
-        KeywordSize::Medium
-    }
-}
-
-impl ToCss for KeywordSize {
-    fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
-    where
-        W: Write,
-    {
-        dest.write_str(match *self {
-            KeywordSize::XXSmall => "xx-small",
-            KeywordSize::XSmall => "x-small",
-            KeywordSize::Small => "small",
-            KeywordSize::Medium => "medium",
-            KeywordSize::Large => "large",
-            KeywordSize::XLarge => "x-large",
-            KeywordSize::XXLarge => "xx-large",
-            KeywordSize::XXXLarge => unreachable!("We should never serialize \
-                                      specified values set via
-                                      HTML presentation attributes"),
-        })
     }
 }
 
@@ -541,7 +518,7 @@ impl FontSize {
         &self,
         context: &Context,
         base_size: FontBaseSize,
-    ) -> computed::FontSize {
+    ) -> ComputedFontSize {
         use values::specified::length::FontRelativeLength;
 
         let compose_keyword = |factor| {
@@ -631,7 +608,7 @@ impl FontSize {
                 }
             }
         };
-        computed::FontSize {
+        ComputedFontSize {
             size: size,
             keyword_info: info,
         }
@@ -639,15 +616,15 @@ impl FontSize {
 }
 
 impl ToComputedValue for FontSize {
-    type ComputedValue = computed::FontSize;
+    type ComputedValue = ComputedFontSize;
 
     #[inline]
-    fn to_computed_value(&self, context: &Context) -> computed::FontSize {
+    fn to_computed_value(&self, context: &Context) -> ComputedFontSize {
         self.to_computed_value_against(context, FontBaseSize::InheritedStyle)
     }
 
     #[inline]
-    fn from_computed_value(computed: &computed::FontSize) -> Self {
+    fn from_computed_value(computed: &ComputedFontSize) -> Self {
         FontSize::Length(LengthOrPercentage::Length(
             ToComputedValue::from_computed_value(&computed.size.0)
         ))
@@ -672,7 +649,7 @@ impl FontSize {
     #[inline]
     /// Get initial value for specified font size.
     pub fn medium() -> Self {
-        FontSize::Keyword(computed::KeywordInfo::medium())
+        FontSize::Keyword(KeywordInfo::medium())
     }
 
     /// Parses a font-size, with quirks.
@@ -700,7 +677,7 @@ impl FontSize {
     pub fn cascade_specified_font_size(
         context: &mut Context,
         specified_value: &FontSize,
-        mut computed: computed::FontSize
+        mut computed: ComputedFontSize
     ) {
         // we could use clone_language and clone_font_family() here but that's
         // expensive. Do it only in gecko mode for now.
@@ -864,9 +841,9 @@ impl FontVariantAlternates {
 }
 
 impl ToComputedValue for FontVariantAlternates {
-    type ComputedValue = computed::FontVariantAlternates;
+    type ComputedValue = ComputedFontVariantAlternates;
 
-    fn to_computed_value(&self, _context: &Context) -> computed::FontVariantAlternates {
+    fn to_computed_value(&self, _context: &Context) -> Self::ComputedValue {
         match *self {
             FontVariantAlternates::Value(ref v) => v.clone(),
             FontVariantAlternates::System(_) => {
@@ -880,7 +857,7 @@ impl ToComputedValue for FontVariantAlternates {
         }
     }
 
-    fn from_computed_value(other: &computed::FontVariantAlternates) -> Self {
+    fn from_computed_value(other: &Self::ComputedValue) -> Self {
         FontVariantAlternates::Value(other.clone())
     }
 }
@@ -981,124 +958,12 @@ impl Parse for FontVariantAlternates {
     }
 }
 
-bitflags! {
-    #[derive(MallocSizeOf)]
-    /// Vairants for east asian variant
-    pub struct VariantEastAsian: u16 {
-        /// None of the features
-        const NORMAL = 0;
-        /// Enables rendering of JIS78 forms (OpenType feature: jp78)
-        const JIS78 = 0x01;
-        /// Enables rendering of JIS83 forms (OpenType feature: jp83).
-        const JIS83 = 0x02;
-        /// Enables rendering of JIS90 forms (OpenType feature: jp90).
-        const JIS90 = 0x04;
-        /// Enables rendering of JIS2004 forms (OpenType feature: jp04).
-        const JIS04 = 0x08;
-        /// Enables rendering of simplified forms (OpenType feature: smpl).
-        const SIMPLIFIED = 0x10;
-        /// Enables rendering of traditional forms (OpenType feature: trad).
-        const TRADITIONAL = 0x20;
-        /// Enables rendering of full-width variants (OpenType feature: fwid).
-        const FULL_WIDTH = 0x40;
-        /// Enables rendering of proportionally-spaced variants (OpenType feature: pwid).
-        const PROPORTIONAL_WIDTH = 0x80;
-        /// Enables display of ruby variant glyphs (OpenType feature: ruby).
-        const RUBY = 0x100;
-    }
-}
-
-#[cfg(feature = "gecko")]
-impl VariantEastAsian {
-    /// Obtain a specified value from a Gecko keyword value
-    ///
-    /// Intended for use with presentation attributes, not style structs
-    pub fn from_gecko_keyword(kw: u16) -> Self {
-        Self::from_bits_truncate(kw)
-    }
-
-    /// Transform into gecko keyword
-    pub fn to_gecko_keyword(self) -> u16 {
-        self.bits()
-    }
-}
-
-impl ToCss for VariantEastAsian {
-    fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
-    where
-        W: Write,
-    {
-        if self.is_empty() {
-            return dest.write_str("normal")
-        }
-
-        let mut has_any = false;
-
-        macro_rules! write_value {
-            ($ident:path => $str:expr) => {
-                if self.intersects($ident) {
-                    if has_any {
-                        dest.write_str(" ")?;
-                    }
-                    has_any = true;
-                    dest.write_str($str)?;
-                }
-            }
-        }
-
-        write_value!(VariantEastAsian::JIS78 => "jis78");
-        write_value!(VariantEastAsian::JIS83 => "jis83");
-        write_value!(VariantEastAsian::JIS90 => "jis90");
-        write_value!(VariantEastAsian::JIS04 => "jis04");
-        write_value!(VariantEastAsian::SIMPLIFIED => "simplified");
-        write_value!(VariantEastAsian::TRADITIONAL => "traditional");
-        write_value!(VariantEastAsian::FULL_WIDTH => "full-width");
-        write_value!(VariantEastAsian::PROPORTIONAL_WIDTH => "proportional-width");
-        write_value!(VariantEastAsian::RUBY => "ruby");
-
-        debug_assert!(has_any);
-        Ok(())
-    }
-}
-
-#[cfg(feature = "gecko")]
-impl_gecko_keyword_conversions!(VariantEastAsian, u16);
-
-/// Asserts that all variant-east-asian matches its NS_FONT_VARIANT_EAST_ASIAN_* value.
-#[cfg(feature = "gecko")]
-#[inline]
-pub fn assert_variant_east_asian_matches() {
-    use gecko_bindings::structs;
-
-    macro_rules! check_variant_east_asian {
-        ( $( $a:ident => $b:path),*, ) => {
-            if cfg!(debug_assertions) {
-                $(
-                    assert_eq!(structs::$a as u16, $b.bits());
-                )*
-            }
-        }
-    }
-
-    check_variant_east_asian! {
-        NS_FONT_VARIANT_EAST_ASIAN_FULL_WIDTH => VariantEastAsian::FULL_WIDTH,
-        NS_FONT_VARIANT_EAST_ASIAN_JIS04 => VariantEastAsian::JIS04,
-        NS_FONT_VARIANT_EAST_ASIAN_JIS78 => VariantEastAsian::JIS78,
-        NS_FONT_VARIANT_EAST_ASIAN_JIS83 => VariantEastAsian::JIS83,
-        NS_FONT_VARIANT_EAST_ASIAN_JIS90 => VariantEastAsian::JIS90,
-        NS_FONT_VARIANT_EAST_ASIAN_PROP_WIDTH => VariantEastAsian::PROPORTIONAL_WIDTH,
-        NS_FONT_VARIANT_EAST_ASIAN_RUBY => VariantEastAsian::RUBY,
-        NS_FONT_VARIANT_EAST_ASIAN_SIMPLIFIED => VariantEastAsian::SIMPLIFIED,
-        NS_FONT_VARIANT_EAST_ASIAN_TRADITIONAL => VariantEastAsian::TRADITIONAL,
-    }
-}
-
 #[cfg_attr(feature = "gecko", derive(MallocSizeOf))]
 #[derive(Clone, Debug, PartialEq, ToCss)]
 /// Allows control of glyph substitution and sizing in East Asian text.
 pub enum FontVariantEastAsian {
     /// Value variant with `variant-east-asian`
-    Value(VariantEastAsian),
+    Value(ComputedFontVariantEastAsian),
     /// System font variant
     System(SystemFont)
 }
@@ -1107,7 +972,7 @@ impl FontVariantEastAsian {
     #[inline]
     /// Get default `font-variant-east-asian` with `empty` variant
     pub fn empty() -> Self {
-        FontVariantEastAsian::Value(VariantEastAsian::empty())
+        FontVariantEastAsian::Value(ComputedFontVariantEastAsian::empty())
     }
 
     /// Get `font-variant-east-asian` with system font
@@ -1126,9 +991,9 @@ impl FontVariantEastAsian {
 }
 
 impl ToComputedValue for FontVariantEastAsian {
-    type ComputedValue = computed::FontVariantEastAsian;
+    type ComputedValue = ComputedFontVariantEastAsian;
 
-    fn to_computed_value(&self, _context: &Context) -> computed::FontVariantEastAsian {
+    fn to_computed_value(&self, _context: &Context) -> Self::ComputedValue {
         match *self {
             FontVariantEastAsian::Value(ref v) => v.clone(),
             FontVariantEastAsian::System(_) => {
@@ -1142,7 +1007,7 @@ impl ToComputedValue for FontVariantEastAsian {
         }
     }
 
-    fn from_computed_value(other: &computed::FontVariantEastAsian) -> Self {
+    fn from_computed_value(other: &Self::ComputedValue) -> Self {
         FontVariantEastAsian::Value(other.clone())
     }
 }
@@ -1155,7 +1020,7 @@ impl Parse for FontVariantEastAsian {
         _context: &ParserContext,
         input: &mut Parser<'i, 't>
     ) -> Result<FontVariantEastAsian, ParseError<'i>> {
-        let mut result = VariantEastAsian::empty();
+        let mut result = ComputedFontVariantEastAsian::empty();
 
         if input.try(|input| input.expect_ident_matching("normal")).is_ok() {
             return Ok(FontVariantEastAsian::Value(result))
@@ -1163,46 +1028,125 @@ impl Parse for FontVariantEastAsian {
 
         while let Ok(flag) = input.try(|input| {
             Ok(match_ignore_ascii_case! { &input.expect_ident().map_err(|_| ())?,
-                "jis78" =>
-                    exclusive_value!((result, VariantEastAsian::JIS78 | VariantEastAsian::JIS83 |
-                                              VariantEastAsian::JIS90 | VariantEastAsian::JIS04 |
-                                              VariantEastAsian::SIMPLIFIED | VariantEastAsian::TRADITIONAL
-                                    ) => VariantEastAsian::JIS78),
-                "jis83" =>
-                    exclusive_value!((result, VariantEastAsian::JIS78 | VariantEastAsian::JIS83 |
-                                              VariantEastAsian::JIS90 | VariantEastAsian::JIS04 |
-                                              VariantEastAsian::SIMPLIFIED | VariantEastAsian::TRADITIONAL
-                                    ) => VariantEastAsian::JIS83),
-                "jis90" =>
-                    exclusive_value!((result, VariantEastAsian::JIS78 | VariantEastAsian::JIS83 |
-                                              VariantEastAsian::JIS90 | VariantEastAsian::JIS04 |
-                                              VariantEastAsian::SIMPLIFIED | VariantEastAsian::TRADITIONAL
-                                    ) => VariantEastAsian::JIS90),
-                "jis04" =>
-                    exclusive_value!((result, VariantEastAsian::JIS78 | VariantEastAsian::JIS83 |
-                                              VariantEastAsian::JIS90 | VariantEastAsian::JIS04 |
-                                              VariantEastAsian::SIMPLIFIED | VariantEastAsian::TRADITIONAL
-                                    ) => VariantEastAsian::JIS04),
-                "simplified" =>
-                    exclusive_value!((result, VariantEastAsian::JIS78 | VariantEastAsian::JIS83 |
-                                              VariantEastAsian::JIS90 | VariantEastAsian::JIS04 |
-                                              VariantEastAsian::SIMPLIFIED | VariantEastAsian::TRADITIONAL
-                                    ) => VariantEastAsian::SIMPLIFIED),
-                "traditional" =>
-                    exclusive_value!((result, VariantEastAsian::JIS78 | VariantEastAsian::JIS83 |
-                                              VariantEastAsian::JIS90 | VariantEastAsian::JIS04 |
-                                              VariantEastAsian::SIMPLIFIED | VariantEastAsian::TRADITIONAL
-                                    ) => VariantEastAsian::TRADITIONAL),
-                "full-width" =>
-                    exclusive_value!((result, VariantEastAsian::FULL_WIDTH |
-                                              VariantEastAsian::PROPORTIONAL_WIDTH
-                                    ) => VariantEastAsian::FULL_WIDTH),
-                "proportional-width" =>
-                    exclusive_value!((result, VariantEastAsian::FULL_WIDTH |
-                                              VariantEastAsian::PROPORTIONAL_WIDTH
-                                    ) => VariantEastAsian::PROPORTIONAL_WIDTH),
-                "ruby" =>
-                    exclusive_value!((result, VariantEastAsian::RUBY) => VariantEastAsian::RUBY),
+                "jis78" => {
+                    exclusive_value!(
+                        (
+                            result,
+                            ComputedFontVariantEastAsian::JIS78 |
+                            ComputedFontVariantEastAsian::JIS83 |
+                            ComputedFontVariantEastAsian::JIS90 |
+                            ComputedFontVariantEastAsian::JIS04 |
+                            ComputedFontVariantEastAsian::SIMPLIFIED |
+                            ComputedFontVariantEastAsian::TRADITIONAL
+                        ) => {
+                            ComputedFontVariantEastAsian::JIS78
+                        }
+                    )
+                }
+                "jis83" => {
+                    exclusive_value!(
+                        (
+                            result,
+                            ComputedFontVariantEastAsian::JIS78 |
+                            ComputedFontVariantEastAsian::JIS83 |
+                            ComputedFontVariantEastAsian::JIS90 |
+                            ComputedFontVariantEastAsian::JIS04 |
+                            ComputedFontVariantEastAsian::SIMPLIFIED |
+                            ComputedFontVariantEastAsian::TRADITIONAL
+                        ) => {
+                            ComputedFontVariantEastAsian::JIS83
+                        }
+                    )
+                }
+                "jis90" => {
+                    exclusive_value!(
+                        (
+                            result,
+                            ComputedFontVariantEastAsian::JIS78 |
+                            ComputedFontVariantEastAsian::JIS83 |
+                            ComputedFontVariantEastAsian::JIS90 |
+                            ComputedFontVariantEastAsian::JIS04 |
+                            ComputedFontVariantEastAsian::SIMPLIFIED |
+                            ComputedFontVariantEastAsian::TRADITIONAL
+                        ) => {
+                            ComputedFontVariantEastAsian::JIS90
+                        }
+                    )
+                }
+                "jis04" => {
+                    exclusive_value!(
+                        (
+                            result,
+                            ComputedFontVariantEastAsian::JIS78 |
+                            ComputedFontVariantEastAsian::JIS83 |
+                            ComputedFontVariantEastAsian::JIS90 |
+                            ComputedFontVariantEastAsian::JIS04 |
+                            ComputedFontVariantEastAsian::SIMPLIFIED |
+                            ComputedFontVariantEastAsian::TRADITIONAL
+                        ) => {
+                            ComputedFontVariantEastAsian::JIS04
+                        }
+                    )
+                }
+                "simplified" => {
+                    exclusive_value!(
+                        (
+                            result,
+                            ComputedFontVariantEastAsian::JIS78 |
+                            ComputedFontVariantEastAsian::JIS83 |
+                            ComputedFontVariantEastAsian::JIS90 |
+                            ComputedFontVariantEastAsian::JIS04 |
+                            ComputedFontVariantEastAsian::SIMPLIFIED |
+                            ComputedFontVariantEastAsian::TRADITIONAL
+                        ) => {
+                            ComputedFontVariantEastAsian::SIMPLIFIED
+                        }
+                    )
+                }
+                "traditional" => {
+                    exclusive_value!(
+                        (
+                            result,
+                            ComputedFontVariantEastAsian::JIS78 |
+                            ComputedFontVariantEastAsian::JIS83 |
+                            ComputedFontVariantEastAsian::JIS90 |
+                            ComputedFontVariantEastAsian::JIS04 |
+                            ComputedFontVariantEastAsian::SIMPLIFIED |
+                            ComputedFontVariantEastAsian::TRADITIONAL
+                        ) => {
+                            ComputedFontVariantEastAsian::TRADITIONAL
+                        }
+                    )
+                }
+                "full-width" => {
+                    exclusive_value!(
+                        (
+                            result,
+                            ComputedFontVariantEastAsian::FULL_WIDTH |
+                            ComputedFontVariantEastAsian::PROPORTIONAL_WIDTH
+                        ) => {
+                            ComputedFontVariantEastAsian::FULL_WIDTH
+                        }
+                    )
+                }
+                "proportional-width" => {
+                    exclusive_value!(
+                        (
+                            result,
+                            ComputedFontVariantEastAsian::FULL_WIDTH |
+                            ComputedFontVariantEastAsian::PROPORTIONAL_WIDTH
+                        ) => {
+                            ComputedFontVariantEastAsian::PROPORTIONAL_WIDTH
+                        }
+                    )
+                }
+                "ruby" => {
+                    exclusive_value!(
+                        (result, ComputedFontVariantEastAsian::RUBY) => {
+                            ComputedFontVariantEastAsian::RUBY
+                        }
+                    )
+                }
                 _ => return Err(()),
             })
         }) {
@@ -1217,128 +1161,13 @@ impl Parse for FontVariantEastAsian {
     }
 }
 
-bitflags! {
-    #[derive(MallocSizeOf)]
-    /// Variants of ligatures
-    pub struct VariantLigatures: u16 {
-        /// Specifies that common default features are enabled
-        const NORMAL = 0;
-        /// Specifies that all types of ligatures and contextual forms
-        /// covered by this property are explicitly disabled
-        const NONE = 0x01;
-        /// Enables display of common ligatures
-        const COMMON_LIGATURES = 0x02;
-        /// Disables display of common ligatures
-        const NO_COMMON_LIGATURES = 0x04;
-        /// Enables display of discretionary ligatures
-        const DISCRETIONARY_LIGATURES = 0x08;
-        /// Disables display of discretionary ligatures
-        const NO_DISCRETIONARY_LIGATURES = 0x10;
-        /// Enables display of historical ligatures
-        const HISTORICAL_LIGATURES = 0x20;
-        /// Disables display of historical ligatures
-        const NO_HISTORICAL_LIGATURES = 0x40;
-        /// Enables display of contextual alternates
-        const CONTEXTUAL = 0x80;
-        /// Disables display of contextual alternates
-        const NO_CONTEXTUAL = 0x100;
-    }
-}
-
-#[cfg(feature = "gecko")]
-impl VariantLigatures {
-    /// Obtain a specified value from a Gecko keyword value
-    ///
-    /// Intended for use with presentation attributes, not style structs
-    pub fn from_gecko_keyword(kw: u16) -> Self {
-        Self::from_bits_truncate(kw)
-    }
-
-    /// Transform into gecko keyword
-    pub fn to_gecko_keyword(self) -> u16 {
-        self.bits()
-    }
-}
-
-impl ToCss for VariantLigatures {
-    fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
-    where
-        W: Write,
-    {
-        if self.is_empty() {
-            return dest.write_str("normal")
-        }
-        if self.contains(VariantLigatures::NONE) {
-            return dest.write_str("none")
-        }
-
-        let mut has_any = false;
-
-        macro_rules! write_value {
-            ($ident:path => $str:expr) => {
-                if self.intersects($ident) {
-                    if has_any {
-                        dest.write_str(" ")?;
-                    }
-                    has_any = true;
-                    dest.write_str($str)?;
-                }
-            }
-        }
-
-        write_value!(VariantLigatures::COMMON_LIGATURES => "common-ligatures");
-        write_value!(VariantLigatures::NO_COMMON_LIGATURES => "no-common-ligatures");
-        write_value!(VariantLigatures::DISCRETIONARY_LIGATURES => "discretionary-ligatures");
-        write_value!(VariantLigatures::NO_DISCRETIONARY_LIGATURES => "no-discretionary-ligatures");
-        write_value!(VariantLigatures::HISTORICAL_LIGATURES => "historical-ligatures");
-        write_value!(VariantLigatures::NO_HISTORICAL_LIGATURES => "no-historical-ligatures");
-        write_value!(VariantLigatures::CONTEXTUAL => "contextual");
-        write_value!(VariantLigatures::NO_CONTEXTUAL => "no-contextual");
-
-        debug_assert!(has_any);
-        Ok(())
-    }
-}
-
-#[cfg(feature = "gecko")]
-impl_gecko_keyword_conversions!(VariantLigatures, u16);
-
-/// Asserts that all variant-east-asian matches its NS_FONT_VARIANT_EAST_ASIAN_* value.
-#[cfg(feature = "gecko")]
-#[inline]
-pub fn assert_variant_ligatures_matches() {
-    use gecko_bindings::structs;
-
-    macro_rules! check_variant_ligatures {
-        ( $( $a:ident => $b:path),*, ) => {
-            if cfg!(debug_assertions) {
-                $(
-                    assert_eq!(structs::$a as u16, $b.bits());
-                )*
-            }
-        }
-    }
-
-    check_variant_ligatures! {
-        NS_FONT_VARIANT_LIGATURES_NONE => VariantLigatures::NONE,
-        NS_FONT_VARIANT_LIGATURES_COMMON => VariantLigatures::COMMON_LIGATURES,
-        NS_FONT_VARIANT_LIGATURES_NO_COMMON => VariantLigatures::NO_COMMON_LIGATURES,
-        NS_FONT_VARIANT_LIGATURES_DISCRETIONARY => VariantLigatures::DISCRETIONARY_LIGATURES,
-        NS_FONT_VARIANT_LIGATURES_NO_DISCRETIONARY => VariantLigatures::NO_DISCRETIONARY_LIGATURES,
-        NS_FONT_VARIANT_LIGATURES_HISTORICAL => VariantLigatures::HISTORICAL_LIGATURES,
-        NS_FONT_VARIANT_LIGATURES_NO_HISTORICAL => VariantLigatures::NO_HISTORICAL_LIGATURES,
-        NS_FONT_VARIANT_LIGATURES_CONTEXTUAL => VariantLigatures::CONTEXTUAL,
-        NS_FONT_VARIANT_LIGATURES_NO_CONTEXTUAL => VariantLigatures::NO_CONTEXTUAL,
-    }
-}
-
 #[cfg_attr(feature = "gecko", derive(MallocSizeOf))]
 #[derive(Clone, Debug, PartialEq, ToCss)]
 /// Ligatures and contextual forms are ways of combining glyphs
 /// to produce more harmonized forms
 pub enum FontVariantLigatures {
     /// Value variant with `variant-ligatures`
-    Value(VariantLigatures),
+    Value(ComputedFontVariantLigatures),
     /// System font variant
     System(SystemFont)
 }
@@ -1361,20 +1190,20 @@ impl FontVariantLigatures {
     #[inline]
     /// Default value of `font-variant-ligatures` as `empty`
     pub fn empty() -> FontVariantLigatures {
-        FontVariantLigatures::Value(VariantLigatures::empty())
+        FontVariantLigatures::Value(ComputedFontVariantLigatures::empty())
     }
 
     #[inline]
     /// Get `none` variant of `font-variant-ligatures`
     pub fn none() -> FontVariantLigatures {
-        FontVariantLigatures::Value(VariantLigatures::NONE)
+        FontVariantLigatures::Value(ComputedFontVariantLigatures::NONE)
     }
 }
 
 impl ToComputedValue for FontVariantLigatures {
-    type ComputedValue = computed::FontVariantLigatures;
+    type ComputedValue = ComputedFontVariantLigatures;
 
-    fn to_computed_value(&self, _context: &Context) -> computed::FontVariantLigatures {
+    fn to_computed_value(&self, _context: &Context) -> Self::ComputedValue {
         match *self {
             FontVariantLigatures::Value(ref v) => v.clone(),
             FontVariantLigatures::System(_) => {
@@ -1388,7 +1217,7 @@ impl ToComputedValue for FontVariantLigatures {
         }
     }
 
-    fn from_computed_value(other: &computed::FontVariantLigatures) -> Self {
+    fn from_computed_value(other: &Self::ComputedValue) -> Self {
         FontVariantLigatures::Value(other.clone())
     }
 }
@@ -1407,49 +1236,105 @@ impl Parse for FontVariantLigatures {
         _context: &ParserContext,
         input: &mut Parser<'i, 't>
     ) -> Result<FontVariantLigatures, ParseError<'i>> {
-        let mut result = VariantLigatures::empty();
+        let mut result = ComputedFontVariantLigatures::empty();
 
         if input.try(|input| input.expect_ident_matching("normal")).is_ok() {
             return Ok(FontVariantLigatures::Value(result))
         }
         if input.try(|input| input.expect_ident_matching("none")).is_ok() {
-            return Ok(FontVariantLigatures::Value(VariantLigatures::NONE))
+            return Ok(FontVariantLigatures::Value(ComputedFontVariantLigatures::NONE))
         }
 
         while let Ok(flag) = input.try(|input| {
             Ok(match_ignore_ascii_case! { &input.expect_ident().map_err(|_| ())?,
-                "common-ligatures" =>
-                    exclusive_value!((result, VariantLigatures::COMMON_LIGATURES |
-                                              VariantLigatures::NO_COMMON_LIGATURES
-                                    ) => VariantLigatures::COMMON_LIGATURES),
-                "no-common-ligatures" =>
-                    exclusive_value!((result, VariantLigatures::COMMON_LIGATURES |
-                                              VariantLigatures::NO_COMMON_LIGATURES
-                                    ) => VariantLigatures::NO_COMMON_LIGATURES),
-                "discretionary-ligatures" =>
-                    exclusive_value!((result, VariantLigatures::DISCRETIONARY_LIGATURES |
-                                              VariantLigatures::NO_DISCRETIONARY_LIGATURES
-                                    ) => VariantLigatures::DISCRETIONARY_LIGATURES),
-                "no-discretionary-ligatures" =>
-                    exclusive_value!((result, VariantLigatures::DISCRETIONARY_LIGATURES |
-                                              VariantLigatures::NO_DISCRETIONARY_LIGATURES
-                                    ) => VariantLigatures::NO_DISCRETIONARY_LIGATURES),
-                "historical-ligatures" =>
-                    exclusive_value!((result, VariantLigatures::HISTORICAL_LIGATURES |
-                                              VariantLigatures::NO_HISTORICAL_LIGATURES
-                                    ) => VariantLigatures::HISTORICAL_LIGATURES),
-                "no-historical-ligatures" =>
-                    exclusive_value!((result, VariantLigatures::HISTORICAL_LIGATURES |
-                                              VariantLigatures::NO_HISTORICAL_LIGATURES
-                                    ) => VariantLigatures::NO_HISTORICAL_LIGATURES),
-                "contextual" =>
-                    exclusive_value!((result, VariantLigatures::CONTEXTUAL |
-                                              VariantLigatures::NO_CONTEXTUAL
-                                    ) => VariantLigatures::CONTEXTUAL),
-                "no-contextual" =>
-                    exclusive_value!((result, VariantLigatures::CONTEXTUAL |
-                                              VariantLigatures::NO_CONTEXTUAL
-                                    ) => VariantLigatures::NO_CONTEXTUAL),
+                "common-ligatures" => {
+                    exclusive_value!(
+                        (
+                            result,
+                            ComputedFontVariantLigatures::COMMON_LIGATURES |
+                            ComputedFontVariantLigatures::NO_COMMON_LIGATURES
+                        ) => {
+                            ComputedFontVariantLigatures::COMMON_LIGATURES
+                        }
+                    )
+                }
+                "no-common-ligatures" => {
+                    exclusive_value!(
+                        (
+                            result,
+                            ComputedFontVariantLigatures::COMMON_LIGATURES |
+                            ComputedFontVariantLigatures::NO_COMMON_LIGATURES
+                        ) => {
+                            ComputedFontVariantLigatures::NO_COMMON_LIGATURES
+                        }
+                    )
+                }
+                "discretionary-ligatures" => {
+                    exclusive_value!(
+                        (
+                            result,
+                            ComputedFontVariantLigatures::DISCRETIONARY_LIGATURES |
+                            ComputedFontVariantLigatures::NO_DISCRETIONARY_LIGATURES
+                        ) => {
+                            ComputedFontVariantLigatures::DISCRETIONARY_LIGATURES
+                        }
+                    )
+                }
+                "no-discretionary-ligatures" => {
+                    exclusive_value!(
+                        (
+                            result,
+                            ComputedFontVariantLigatures::DISCRETIONARY_LIGATURES |
+                            ComputedFontVariantLigatures::NO_DISCRETIONARY_LIGATURES
+                        ) => {
+                            ComputedFontVariantLigatures::NO_DISCRETIONARY_LIGATURES
+                        }
+                    )
+                }
+                "historical-ligatures" => {
+                    exclusive_value!(
+                        (
+                            result,
+                            ComputedFontVariantLigatures::HISTORICAL_LIGATURES |
+                            ComputedFontVariantLigatures::NO_HISTORICAL_LIGATURES
+                        ) => {
+                            ComputedFontVariantLigatures::HISTORICAL_LIGATURES
+                        }
+                    )
+                }
+                "no-historical-ligatures" => {
+                    exclusive_value!(
+                        (
+                            result,
+                            ComputedFontVariantLigatures::HISTORICAL_LIGATURES |
+                            ComputedFontVariantLigatures::NO_HISTORICAL_LIGATURES
+                        ) => {
+                            ComputedFontVariantLigatures::NO_HISTORICAL_LIGATURES
+                        }
+                    )
+                }
+                "contextual" => {
+                    exclusive_value!(
+                        (
+                            result,
+                            ComputedFontVariantLigatures::CONTEXTUAL |
+                            ComputedFontVariantLigatures::NO_CONTEXTUAL
+                        ) => {
+                            ComputedFontVariantLigatures::CONTEXTUAL
+                        }
+                    )
+                }
+                "no-contextual" => {
+                    exclusive_value!(
+                        (
+                            result,
+                            ComputedFontVariantLigatures::CONTEXTUAL |
+                            ComputedFontVariantLigatures::NO_CONTEXTUAL
+                        ) => {
+                            ComputedFontVariantLigatures::NO_CONTEXTUAL
+                        }
+                    )
+                }
                 _ => return Err(()),
             })
         }) {
@@ -1464,120 +1349,12 @@ impl Parse for FontVariantLigatures {
     }
 }
 
-bitflags! {
-    #[derive(MallocSizeOf)]
-    /// Vairants of numeric values
-    pub struct VariantNumeric: u8 {
-        /// None of other variants are enabled.
-        const NORMAL = 0;
-        /// Enables display of lining numerals.
-        const LINING_NUMS = 0x01;
-        /// Enables display of old-style numerals.
-        const OLDSTYLE_NUMS = 0x02;
-        /// Enables display of proportional numerals.
-        const PROPORTIONAL_NUMS = 0x04;
-        /// Enables display of tabular numerals.
-        const TABULAR_NUMS = 0x08;
-        /// Enables display of lining diagonal fractions.
-        const DIAGONAL_FRACTIONS = 0x10;
-        /// Enables display of lining stacked fractions.
-        const STACKED_FRACTIONS = 0x20;
-        /// Enables display of letter forms used with ordinal numbers.
-        const ORDINAL = 0x80;
-        /// Enables display of slashed zeros.
-        const SLASHED_ZERO = 0x40;
-    }
-}
-
-#[cfg(feature = "gecko")]
-impl VariantNumeric {
-    /// Obtain a specified value from a Gecko keyword value
-    ///
-    /// Intended for use with presentation attributes, not style structs
-    pub fn from_gecko_keyword(kw: u8) -> Self {
-        Self::from_bits_truncate(kw)
-    }
-
-    /// Transform into gecko keyword
-    pub fn to_gecko_keyword(self) -> u8 {
-        self.bits()
-    }
-}
-
-impl ToCss for VariantNumeric {
-    fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
-    where
-        W: Write,
-    {
-        if self.is_empty() {
-            return dest.write_str("normal")
-        }
-
-        let mut has_any = false;
-
-        macro_rules! write_value {
-            ($ident:path => $str:expr) => {
-                if self.intersects($ident) {
-                    if has_any {
-                        dest.write_str(" ")?;
-                    }
-                    has_any = true;
-                    dest.write_str($str)?;
-                }
-            }
-        }
-
-        write_value!(VariantNumeric::LINING_NUMS => "lining-nums");
-        write_value!(VariantNumeric::OLDSTYLE_NUMS => "oldstyle-nums");
-        write_value!(VariantNumeric::PROPORTIONAL_NUMS => "proportional-nums");
-        write_value!(VariantNumeric::TABULAR_NUMS => "tabular-nums");
-        write_value!(VariantNumeric::DIAGONAL_FRACTIONS => "diagonal-fractions");
-        write_value!(VariantNumeric::STACKED_FRACTIONS => "stacked-fractions");
-        write_value!(VariantNumeric::SLASHED_ZERO => "slashed-zero");
-        write_value!(VariantNumeric::ORDINAL => "ordinal");
-
-        debug_assert!(has_any);
-        Ok(())
-    }
-}
-
-#[cfg(feature = "gecko")]
-impl_gecko_keyword_conversions!(VariantNumeric, u8);
-
-/// Asserts that all variant-east-asian matches its NS_FONT_VARIANT_EAST_ASIAN_* value.
-#[cfg(feature = "gecko")]
-#[inline]
-pub fn assert_variant_numeric_matches() {
-    use gecko_bindings::structs;
-
-    macro_rules! check_variant_numeric {
-        ( $( $a:ident => $b:path),*, ) => {
-            if cfg!(debug_assertions) {
-                $(
-                    assert_eq!(structs::$a as u8, $b.bits());
-                )*
-            }
-        }
-    }
-
-    check_variant_numeric! {
-        NS_FONT_VARIANT_NUMERIC_LINING => VariantNumeric::LINING_NUMS,
-        NS_FONT_VARIANT_NUMERIC_OLDSTYLE => VariantNumeric::OLDSTYLE_NUMS,
-        NS_FONT_VARIANT_NUMERIC_PROPORTIONAL => VariantNumeric::PROPORTIONAL_NUMS,
-        NS_FONT_VARIANT_NUMERIC_TABULAR => VariantNumeric::TABULAR_NUMS,
-        NS_FONT_VARIANT_NUMERIC_DIAGONAL_FRACTIONS => VariantNumeric::DIAGONAL_FRACTIONS,
-        NS_FONT_VARIANT_NUMERIC_STACKED_FRACTIONS => VariantNumeric::STACKED_FRACTIONS,
-        NS_FONT_VARIANT_NUMERIC_SLASHZERO => VariantNumeric::SLASHED_ZERO,
-        NS_FONT_VARIANT_NUMERIC_ORDINAL => VariantNumeric::ORDINAL,
-    }
-}
-
 #[cfg_attr(feature = "gecko", derive(MallocSizeOf))]
 #[derive(Clone, Debug, PartialEq, ToCss)]
 /// Specifies control over numerical forms.
 pub enum FontVariantNumeric {
     /// Value variant with `variant-numeric`
-    Value(VariantNumeric),
+    Value(ComputedFontVariantNumeric),
     /// System font
     System(SystemFont)
 }
@@ -1586,7 +1363,7 @@ impl FontVariantNumeric {
     #[inline]
     /// Default value of `font-variant-numeric` as `empty`
     pub fn empty() -> FontVariantNumeric {
-        FontVariantNumeric::Value(VariantNumeric::empty())
+        FontVariantNumeric::Value(ComputedFontVariantNumeric::empty())
     }
 
     /// Get `font-variant-numeric` with system font
@@ -1605,9 +1382,9 @@ impl FontVariantNumeric {
 }
 
 impl ToComputedValue for FontVariantNumeric {
-    type ComputedValue = computed::FontVariantNumeric;
+    type ComputedValue = ComputedFontVariantNumeric;
 
-    fn to_computed_value(&self, _context: &Context) -> computed::FontVariantNumeric {
+    fn to_computed_value(&self, _context: &Context) -> Self::ComputedValue {
         match *self {
             FontVariantNumeric::Value(ref v) => v.clone(),
             FontVariantNumeric::System(_) => {
@@ -1621,7 +1398,7 @@ impl ToComputedValue for FontVariantNumeric {
         }
     }
 
-    fn from_computed_value(other: &computed::FontVariantNumeric) -> Self {
+    fn from_computed_value(other: &Self::ComputedValue) -> Self {
         FontVariantNumeric::Value(other.clone())
     }
 }
@@ -1640,7 +1417,7 @@ impl Parse for FontVariantNumeric {
         _context: &ParserContext,
         input: &mut Parser<'i, 't>
     ) -> Result<FontVariantNumeric, ParseError<'i>> {
-        let mut result = VariantNumeric::empty();
+        let mut result = ComputedFontVariantNumeric::empty();
 
         if input.try(|input| input.expect_ident_matching("normal")).is_ok() {
             return Ok(FontVariantNumeric::Value(result))
@@ -1648,34 +1425,92 @@ impl Parse for FontVariantNumeric {
 
         while let Ok(flag) = input.try(|input| {
             Ok(match_ignore_ascii_case! { &input.expect_ident().map_err(|_| ())?,
-                "ordinal" =>
-                    exclusive_value!((result, VariantNumeric::ORDINAL) => VariantNumeric::ORDINAL),
-                "slashed-zero" =>
-                    exclusive_value!((result, VariantNumeric::SLASHED_ZERO) => VariantNumeric::SLASHED_ZERO),
-                "lining-nums" =>
-                    exclusive_value!((result, VariantNumeric::LINING_NUMS |
-                                              VariantNumeric::OLDSTYLE_NUMS
-                                    ) => VariantNumeric::LINING_NUMS),
-                "oldstyle-nums" =>
-                    exclusive_value!((result, VariantNumeric::LINING_NUMS |
-                                              VariantNumeric::OLDSTYLE_NUMS
-                                    ) => VariantNumeric::OLDSTYLE_NUMS),
-                "proportional-nums" =>
-                    exclusive_value!((result, VariantNumeric::PROPORTIONAL_NUMS |
-                                              VariantNumeric::TABULAR_NUMS
-                                    ) => VariantNumeric::PROPORTIONAL_NUMS),
-                "tabular-nums" =>
-                    exclusive_value!((result, VariantNumeric::PROPORTIONAL_NUMS |
-                                              VariantNumeric::TABULAR_NUMS
-                                    ) => VariantNumeric::TABULAR_NUMS),
-                "diagonal-fractions" =>
-                    exclusive_value!((result, VariantNumeric::DIAGONAL_FRACTIONS |
-                                              VariantNumeric::STACKED_FRACTIONS
-                                    ) => VariantNumeric::DIAGONAL_FRACTIONS),
-                "stacked-fractions" =>
-                    exclusive_value!((result, VariantNumeric::DIAGONAL_FRACTIONS |
-                                              VariantNumeric::STACKED_FRACTIONS
-                                    ) => VariantNumeric::STACKED_FRACTIONS),
+                "ordinal" => {
+                    exclusive_value!(
+                        (
+                            result,
+                            ComputedFontVariantNumeric::ORDINAL
+                        ) => {
+                            ComputedFontVariantNumeric::ORDINAL
+                        }
+                    )
+                }
+                "slashed-zero" => {
+                    exclusive_value!(
+                        (
+                            result,
+                            ComputedFontVariantNumeric::SLASHED_ZERO
+                        ) => {
+                            ComputedFontVariantNumeric::SLASHED_ZERO
+                        }
+                    )
+                }
+                "lining-nums" => {
+                    exclusive_value!(
+                        (
+                            result,
+                            ComputedFontVariantNumeric::LINING_NUMS |
+                            ComputedFontVariantNumeric::OLDSTYLE_NUMS
+                        ) => {
+                            ComputedFontVariantNumeric::LINING_NUMS
+                        }
+                    )
+                }
+                "oldstyle-nums" => {
+                    exclusive_value!(
+                        (
+                            result,
+                            ComputedFontVariantNumeric::LINING_NUMS |
+                            ComputedFontVariantNumeric::OLDSTYLE_NUMS
+                        ) => {
+                            ComputedFontVariantNumeric::OLDSTYLE_NUMS
+                        }
+                    )
+                }
+                "proportional-nums" => {
+                    exclusive_value!(
+                        (
+                            result,
+                            ComputedFontVariantNumeric::PROPORTIONAL_NUMS |
+                            ComputedFontVariantNumeric::TABULAR_NUMS
+                        ) => {
+                            ComputedFontVariantNumeric::PROPORTIONAL_NUMS
+                        }
+                    )
+                },
+                "tabular-nums" => {
+                    exclusive_value!(
+                        (
+                            result,
+                            ComputedFontVariantNumeric::PROPORTIONAL_NUMS |
+                            ComputedFontVariantNumeric::TABULAR_NUMS
+                        ) => {
+                            ComputedFontVariantNumeric::TABULAR_NUMS
+                        }
+                    )
+                }
+                "diagonal-fractions" => {
+                    exclusive_value!(
+                        (
+                            result,
+                            ComputedFontVariantNumeric::DIAGONAL_FRACTIONS |
+                            ComputedFontVariantNumeric::STACKED_FRACTIONS
+                        ) => {
+                            ComputedFontVariantNumeric::DIAGONAL_FRACTIONS
+                        }
+                    )
+                }
+                "stacked-fractions" => {
+                    exclusive_value!(
+                        (
+                            result,
+                            ComputedFontVariantNumeric::DIAGONAL_FRACTIONS |
+                            ComputedFontVariantNumeric::STACKED_FRACTIONS
+                        ) => {
+                            ComputedFontVariantNumeric::STACKED_FRACTIONS
+                        }
+                    )
+                }
                 _ => return Err(()),
             })
         }) {
@@ -1726,9 +1561,9 @@ impl FontFeatureSettings {
 }
 
 impl ToComputedValue for FontFeatureSettings {
-    type ComputedValue = computed::FontFeatureSettings;
+    type ComputedValue = ComputedFontFeatureSettings;
 
-    fn to_computed_value(&self, context: &Context) -> computed::FontFeatureSettings {
+    fn to_computed_value(&self, context: &Context) -> Self::ComputedValue {
         match *self {
             FontFeatureSettings::Value(ref v) => v.to_computed_value(context),
             FontFeatureSettings::System(_) => {
@@ -1742,7 +1577,7 @@ impl ToComputedValue for FontFeatureSettings {
         }
     }
 
-    fn from_computed_value(other: &computed::FontFeatureSettings) -> Self {
+    fn from_computed_value(other: &Self::ComputedValue) -> Self {
         FontFeatureSettings::Value(ToComputedValue::from_computed_value(other))
     }
 }
@@ -1888,23 +1723,23 @@ impl FontLanguageOverride {
 }
 
 impl ToComputedValue for FontLanguageOverride {
-    type ComputedValue = computed::FontLanguageOverride;
+    type ComputedValue = ComputedFontLanguageOverride;
 
     #[inline]
-    fn to_computed_value(&self, _context: &Context) -> computed::FontLanguageOverride {
+    fn to_computed_value(&self, _context: &Context) -> Self::ComputedValue {
         #[allow(unused_imports)] use std::ascii::AsciiExt;
         match *self {
-            FontLanguageOverride::Normal => computed::FontLanguageOverride(0),
+            FontLanguageOverride::Normal => ComputedFontLanguageOverride(0),
             FontLanguageOverride::Override(ref lang) => {
                 if lang.is_empty() || lang.len() > 4 || !lang.is_ascii() {
-                    return computed::FontLanguageOverride(0)
+                    return ComputedFontLanguageOverride(0)
                 }
                 let mut computed_lang = lang.to_string();
                 while computed_lang.len() < 4 {
                     computed_lang.push(' ');
                 }
                 let bytes = computed_lang.into_bytes();
-                computed::FontLanguageOverride(BigEndian::read_u32(&bytes))
+                ComputedFontLanguageOverride(BigEndian::read_u32(&bytes))
             }
             FontLanguageOverride::System(_) => {
                 #[cfg(feature = "gecko")] {
@@ -1917,7 +1752,7 @@ impl ToComputedValue for FontLanguageOverride {
         }
     }
     #[inline]
-    fn from_computed_value(computed: &computed::FontLanguageOverride) -> Self {
+    fn from_computed_value(computed: &Self::ComputedValue) -> Self {
         if computed.0 == 0 {
             return FontLanguageOverride::Normal
         }
@@ -1945,15 +1780,6 @@ impl Parse for FontLanguageOverride {
     }
 }
 
-/// A font four-character tag, represented as a u32 for convenience.
-///
-/// See:
-///   https://drafts.csswg.org/css-fonts-4/#font-variation-settings-def
-///   https://drafts.csswg.org/css-fonts-4/#descdef-font-face-font-feature-settings
-///
-#[derive(Clone, Copy, Debug, Eq, MallocSizeOf, PartialEq, ToComputedValue)]
-pub struct FontTag(pub u32);
-
 impl Parse for FontTag {
     fn parse<'i, 't>(
         _context: &ParserContext,
@@ -1972,20 +1798,6 @@ impl Parse for FontTag {
 
         let mut raw = Cursor::new(tag.as_bytes());
         Ok(FontTag(raw.read_u32::<BigEndian>().unwrap()))
-    }
-}
-
-impl ToCss for FontTag {
-    fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
-    where
-        W: Write,
-    {
-        use byteorder::{BigEndian, ByteOrder};
-        use std::str;
-
-        let mut raw = [0u8; 4];
-        BigEndian::write_u32(&mut raw, self.0);
-        str::from_utf8(&raw).unwrap_or_default().to_css(dest)
     }
 }
 
@@ -2107,6 +1919,31 @@ impl Parse for MozScriptMinSize {
     }
 }
 
+impl ToComputedValue for MozScriptMinSize {
+    type ComputedValue = ComputedMozScriptMinSize;
+
+    fn to_computed_value(&self, cx: &Context) -> Self::ComputedValue {
+        // this value is used in the computation of font-size, so
+        // we use the parent size
+        let base_size = FontBaseSize::InheritedStyle;
+        match self.0 {
+            NoCalcLength::FontRelative(value) => {
+                value.to_computed_value(cx, base_size)
+            }
+            NoCalcLength::ServoCharacterWidth(value) => {
+                value.to_computed_value(base_size.resolve(cx))
+            }
+            ref l => {
+                l.to_computed_value(cx)
+            }
+        }
+    }
+
+    fn from_computed_value(other: &Self::ComputedValue) -> Self {
+        MozScriptMinSize(ToComputedValue::from_computed_value(other))
+    }
+}
+
 #[cfg_attr(feature = "gecko", derive(MallocSizeOf))]
 #[derive(Clone, Copy, Debug, PartialEq, ToCss)]
 /// Changes the scriptlevel in effect for the children.
@@ -2136,6 +1973,38 @@ impl Parse for MozScriptLevel {
         }
         input.expect_ident_matching("auto")?;
         Ok(MozScriptLevel::Auto)
+    }
+}
+
+#[cfg(feature = "gecko")]
+impl ToComputedValue for MozScriptLevel {
+    type ComputedValue = ComputedMozScriptLevel;
+
+    fn to_computed_value(&self, cx: &Context) -> Self::ComputedValue {
+        use properties::longhands::_moz_math_display::SpecifiedValue as DisplayValue;
+        use std::{cmp, i8};
+
+        let int = match *self {
+            MozScriptLevel::Auto => {
+                let parent = cx.builder.get_parent_font().clone__moz_script_level() as i32;
+                let display = cx.builder.get_parent_font().clone__moz_math_display();
+                if display == DisplayValue::Inline {
+                    parent + 1
+                } else {
+                    parent
+                }
+            }
+            MozScriptLevel::Relative(rel) => {
+                let parent = cx.builder.get_parent_font().clone__moz_script_level();
+                parent as i32 + rel
+            }
+            MozScriptLevel::MozAbsolute(abs) => abs,
+        };
+        cmp::min(int, i8::MAX as i32) as Self::ComputedValue
+    }
+
+    fn from_computed_value(other: &Self::ComputedValue) -> Self {
+        MozScriptLevel::MozAbsolute(*other as i32)
     }
 }
 
